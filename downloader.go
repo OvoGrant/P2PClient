@@ -20,35 +20,6 @@ const (
 	ROOT_SERVER_TCP = "p2pcomp4911.xyz:4912"
 )
 
-func delayServer() {
-
-	listener, err := net.Listen("tcp", TEST_PORT)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for {
-
-		conn, err := listener.Accept()
-
-		if err != nil {
-
-		}
-
-		go func(conn net.Conn) {
-
-			defer conn.Close()
-
-			data := make([]byte, 1024)
-
-			conn.Write(data)
-
-		}(conn)
-	}
-
-}
-
 func makeRequest(filename string) *FileResponse {
 
 	conn, err := net.Dial("tcp", ROOT_SERVER_TCP)

@@ -1,49 +1,26 @@
 package main
 
 import (
-	"fmt"
-	"gopkg.in/yaml.v3"
 	"log"
 	"os"
 	"path"
 )
 
-const (
-	CONFIG_FILE = "CONFIGURATION.yaml"
-)
-
-// represents a user. There's actually no real
-type configStruct struct {
-	DownloadLocation string `yaml:"download_location"`
+// type fileUtil contains the files that have been indexed and their location in the file system
+type fileUtil struct {
+	indexedFiles map[string]bool
+	location     string
 }
 
-var indexedFiles = make(map[string]bool)
-
-var configuration configStruct
-
-func getConfig() *configStruct {
-
-	file, err := os.Open(CONFIG_FILE)
-
-	if err != nil {
-		createConfig()
-		file, err = os.Open(CONFIG_FILE)
-	}
-
-	decoder := yaml.NewDecoder(file)
-
-	var config configStruct
-
-	decoder.Decode(&config)
-
-	configuration = config
-
-	return &config
+// NewFileUtil returns an instance to a new fileUtil
+func NewFileUtil(DownloadLocation string) *fileUtil {
+	return &fileUtil{make(map[string]bool), DownloadLocation}
 }
 
-func writeFileToDownloadLocation(filename string, bytes []byte) error {
+// writeFileToDownloadLocation writes a slice of bytes to a file with the provided name
+func (fu *fileUtil) writeFileToDownloadLocation(filename string, bytes []byte) error {
 
-	err := os.WriteFile(path.Join(configuration.DownloadLocation, filename), bytes, 0644)
+	err := os.WriteFile(path.Join(fu.location, filename), bytes, 0644)
 
 	if err != nil {
 		return err
@@ -52,49 +29,12 @@ func writeFileToDownloadLocation(filename string, bytes []byte) error {
 	return nil
 }
 
-func createConfig() {
-
-	file, err := os.OpenFile(CONFIG_FILE, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-
-	if err != nil {
-		log.Fatalf("Error creating file %v", err)
-	}
-
-	defer file.Close()
-
-	encoder := yaml.NewEncoder(file)
-
-	var config configStruct
-
-	fmt.Println("Enter the download location you wish to use to store your files")
-
-	var dirName string
-
-	fmt.Scanln(&dirName)
-
-	dir, err := os.Stat(dirName)
-
-	for err != nil || !dir.IsDir() {
-
-		fmt.Println("Enter the download location you wish to use to store your files")
-
-		fmt.Scanln(&dirName)
-
-		dir, err = os.Stat(dirName)
-
-	}
-
-	config.DownloadLocation = dirName
-
-	err = encoder.Encode(config)
-}
-
-// we only index new files
-func getFiles() []string {
+// getFiles returns a slice of filenames that have not been indexed yet
+func (fu *fileUtil) getFiles() []string {
 
 	files := make(map[string]bool)
 
-	dir, err := os.ReadDir(configuration.DownloadLocation)
+	dir, err := os.ReadDir(fu.location)
 
 	if err != nil {
 		log.Fatalf("Config error restart program")
@@ -102,11 +42,10 @@ func getFiles() []string {
 
 	for _, d := range dir {
 
-		_, ok := indexedFiles[d.Name()]
+		_, ok := fu.indexedFiles[d.Name()]
 
 		if !ok {
-			fmt.Println("OK")
-			indexedFiles[d.Name()] = true
+			fu.indexedFiles[d.Name()] = true
 			files[d.Name()] = true
 		}
 

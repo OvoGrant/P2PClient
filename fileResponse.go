@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"encoding/json"
 	"strings"
 )
 
@@ -11,27 +11,31 @@ const (
 	NETWORK_ERROR = "NETWORK_ERROR"
 )
 
+// FileResponse represents the message returned after a client requests a file from the indexing server
 type FileResponse struct {
 	Status string
 	Error  string
-	Peers  []string
+	Peers  []peerResponse
 }
 
+// parseResponse parses a string and returns a fileResponse struct
 func parseResponse(data string) *FileResponse {
 	var response FileResponse
 
 	body := strings.Split(data, "\n")
 
-	fmt.Println(body)
-
 	if body[0] == ACK {
 
 		response.Status = ACK
 
-		response.Peers = make([]string, 0)
+		response.Peers = make([]peerResponse, 0)
 
 		for i := 1; i < len(body); i++ {
-			response.Peers = append(response.Peers, body[i])
+			peer := peerResponse{}
+
+			json.Unmarshal([]byte(body[i]), &peer)
+
+			response.Peers = append(response.Peers, peer)
 		}
 
 		return &response
@@ -50,10 +54,12 @@ func parseResponse(data string) *FileResponse {
 	return &response
 }
 
+// OK returns whether the result of the request was good
 func (fr *FileResponse) OK() bool {
 	return fr.Status == ACK
 }
 
-func (fr *FileResponse) GetPeer(position int) string {
+// GetPeer returns the peer at a particular position
+func (fr *FileResponse) GetPeer(position int) peerResponse {
 	return fr.Peers[position]
 }

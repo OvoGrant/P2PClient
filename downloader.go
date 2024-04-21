@@ -1,67 +1,67 @@
 package main
 
 import (
-	"bufio"
 	"errors"
-	"fmt"
 	"io"
-	"log"
 	"net"
-	"os"
-	"path"
-	"strings"
-	"time"
 )
 
 const (
-	DOWNLOAD_PORT   = ":4200"
-	TEST_PORT       = ":4100"
-	ROOT_SERVER_UDP = "p2pcomp4911.xyz:4911"
 	ROOT_SERVER_TCP = "p2pcomp4911.xyz:4912"
 )
 
+// makeRequest makes to the root server for the provided filename
 func makeRequest(filename string) *FileResponse {
 
+	//dial the server for the connection
 	conn, err := net.Dial("tcp", ROOT_SERVER_TCP)
 
+	//if the error is nil create response with NETWORK_ERROR message
 	if err != nil {
 		return parseResponse(NETWORK_ERROR)
 	}
 
 	defer conn.Close()
 
+	//write the name of the file with a newline character afterwards
 	n, err := conn.Write([]byte(filename + "\n"))
 
 	if err != nil {
 		return parseResponse(NETWORK_ERROR)
 	}
 
+	//make buffer to store the response
 	buffer := make([]byte, 1024)
 
+	//read the response into the buffer
 	n, err = conn.Read(buffer)
 
 	if err != nil || n == 0 {
-		return parseResponse(" ")
+		return parseResponse("")
 	}
 
+	//return the result of parsing the response
 	return parseResponse(string(buffer[:n]))
 
 }
 
-func initiateDownload(peerAddress string, filename string) error {
+// initiateDownload takes in a peerResponse, file name and location to save the result to and returns an error
+func initiateDownload(peer peerResponse, filename, saveLocation string) error {
 
-	fmt.Println(peerAddress + DOWNLOAD_PORT)
-	fmt.Println(len(peerAddress + DOWNLOAD_PORT))
+	//dial the peers download port
+	conn, err := net.Dial("tcp", peer.Address+":"+peer.DownloadPort)
 
-	conn, err := net.Dial("tcp", peerAddress+DOWNLOAD_PORT)
-
+	//if the error is nil return no connection error
 	if err != nil {
-		fmt.Println(err)
 		return errors.New("no connection")
 	}
 
 	//send the request over the connection
-	conn.Write([]byte(filename + "\n"))
+	_, err = conn.Write([]byte(filename + "\n"))
+
+	if err != nil {
+		return errors.New("download failed")
+	}
 
 	file, err := io.ReadAll(conn)
 
@@ -69,112 +69,15 @@ func initiateDownload(peerAddress string, filename string) error {
 		return errors.New("download failed")
 	}
 
-	err = writeFileToDownloadLocation(filename, file)
+	//create a new file util to save the file to disk
+	fileUtil := NewFileUtil(saveLocation)
+
+	//write the file to location
+	err = fileUtil.writeFileToDownloadLocation(filename, file)
 
 	if err != nil {
 		return errors.New("error writing file to disk")
 	}
 
 	return nil
-}
-
-// this should handle the download
-func downloadServer() {
-
-	listener, err := net.Listen("tcp", "127.0.0.1"+DOWNLOAD_PORT)
-
-	ConnectionLogger.Println("Starting download server...")
-
-	defer listener.Close()
-
-	if err != nil {
-		ConnectionLogger.Println("Error: \n", err)
-	}
-
-	for {
-
-		conn, err := listener.Accept()
-
-		if err != nil {
-			ConnectionLogger.Println(err)
-			continue
-		}
-
-		go handleDownload(conn)
-	}
-}
-
-// read file and download it
-func handleDownload(conn net.Conn) {
-
-	ConnectionLogger.Printf("Incoming connection from %s\n", conn.LocalAddr())
-
-	defer conn.Close()
-
-	//a download request should consist of one line that is the name of the file
-	reader := bufio.NewScanner(conn)
-
-	if !reader.Scan() {
-		fmt.Println("Error: ", reader.Err())
-		conn.Write([]byte("NACK\nFormat Error"))
-		return
-	}
-
-	fmt.Println("debug")
-
-	filename := reader.Text()
-
-	fmt.Println(filename)
-
-	ConnectionLogger.Println(filename)
-
-	file, err := os.ReadFile(path.Join(configuration.DownloadLocation, filename))
-
-	fmt.Println(file)
-
-	if err != nil {
-		fmt.Println(err)
-		conn.Write([]byte("Nack\n" + err.Error()))
-	}
-
-	nn, err := conn.Write(file)
-
-	fmt.Println(nn)
-
-}
-
-func indexingClient() {
-
-	address, err := net.ResolveUDPAddr("udp4", ROOT_SERVER_UDP)
-
-	conn, err := net.DialUDP("udp4", nil, address)
-
-	if err != nil {
-		fmt.Println(err)
-		log.Fatal("Error could not connect to internet")
-	}
-
-	//the indexing client works theoretically
-	for {
-
-		time.Sleep(1 * time.Second)
-
-		files := getFiles()
-
-		_, err = conn.Write([]byte(strings.Join(files, "\n")))
-
-		response := make([]byte, 1024)
-
-		n, _, err := conn.ReadFrom(response)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		resp := string(response[0:n])
-
-		if resp == ACK {
-			time.Sleep(5 * time.Second)
-		}
-	}
 }
